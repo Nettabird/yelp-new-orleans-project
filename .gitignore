@@ -1,0 +1,22 @@
+# Yelp data
+data/raw/
+*.tar
+*.zip
+data/new_orleans/business.parquet
+data/new_orleans/reviews.rds
+data/new_orleans/reviews.parquet
+
+# R artifacts
+.Rhistory
+.RData
+.Rproj.user/
+
+# Quarto
+/.quarto/
+*_cache/
+
+# OS
+.DS_Store
+
+# temp. Remove after reviewing
+yelp_new_orleans_project.qmd
