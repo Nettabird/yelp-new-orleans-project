@@ -6,11 +6,13 @@ Analysis of New Orleans restaurant reviews from the [Yelp Open Dataset](https://
 
 ## Research question
 
-*TODO: state one clear research question here.*
+What restaurants in New Orleans are best for dinner for a tourist family that includes picky eaters?
 
 ## Executive summary
 
 *TODO: two or three sentences stating the answer (the top 10 restaurants) and the main finding. Fill in after the analysis.*
+
+# Include interactive map.
 
 ## Files and folders
 
@@ -42,11 +44,11 @@ yelp-new-orleans-project/
 
 The review file is about 5 GB, and parsing it takes roughly 8 to 10 minutes. `import.R` streams it in chunks, keeps only New Orleans businesses, and saves the result to `data/new_orleans/`. After that, every later step reads the small cached files.
 
-To run the project for another city, change `area_city`, `area_state`, and `out_dir` at the top of `R/import.R`.
+To run the project for another city, change `area_city`, `area_state`, and `out_dir` at the top of `R/import.R`, and make the necessary changes to the geographic area in the .qmd file.
 
 ## Why the raw data is not on GitHub
 
-The raw JSON files are several gigabytes, which is far above GitHub's 100 MB file limit. The filtered New Orleans files in `data/new_orleans/` are small enough to commit, and the steps above recreate everything else. Only business.parquet and reviews_no_text.rds are in the repo; the full reviews with text are recreated by running R/import.R
+The raw JSON files are several gigabytes, which is far above GitHub's 100 MB file limit. The filtered New Orleans files in `data/new_orleans/` are small enough to commit, and the steps above recreate everything else. Only business.rds and reviews_no_text.rds are in the repo; the full reviews with text are recreated by running R/import.R
 
 ## Report
 
@@ -58,7 +60,7 @@ The raw JSON files are several gigabytes, which is far above GitHub's 100 MB fil
 
 ## Tools
 
-R, RStudio, Quarto. Packages: tidyverse, jsonlite, lubridate, sf, tigris, scales, viridis, arrow.
+R, RStudio, Quarto. Packages: tidyverse, jsonlite, lubridate, sf, tigris, scales, viridis, renv.
 
 ## AI assistance
 

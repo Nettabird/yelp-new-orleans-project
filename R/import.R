@@ -1,35 +1,36 @@
 library(tidyverse)
 library(jsonlite)
-library(arrow)
 
-# To use another area, change these two values and point out_dir to a new folder.
-area_city  <- "New Orleans"
+# To use another area, change these values and point out_dir to a new folder.
+area_city  <- "New Orleans"       # unused for New Orleans, kept for other areas in future
 area_state <- "LA"
-out_dir    <- "data/new_orleans"
+out_dir    <- "data/LA"
+
+overwrite <- FALSE   # set TRUE to rebuild the cached files, then set back to FALSE
 
 business_file <- "data/raw/yelp_academic_dataset_business.json"
 review_file <- "data/raw/yelp_academic_dataset_review.json"
-business_out <- file.path(out_dir, "business.parquet")
-review_out <- file.path(out_dir, "reviews.parquet")
+business_out <- file.path(out_dir, "business.rds")
+review_out <- file.path(out_dir, "reviews.rds")
 
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Businesses: small file, parse directly, keep the area only
-if (!file.exists(business_out)) {
+if (overwrite || !file.exists(business_out)) {
   business <- jsonlite::stream_in(file(business_file), verbose = FALSE) |>
-    select( # on changing select, delete business.parquet and reviews.parquet
+    select( # on changing select, set overwrite to TRUE
       business_id, name, address, city, state, postal_code,
       latitude, longitude, stars, review_count, categories
     ) |>
-    # on changing filters, delete business.parquet and reviews.parquet
-    filter(city == area_city, state == area_state)
+    # on changing filters, set overwrite to TRUE
+    filter(state %in% area_state, str_detect(categories, "Restaurants"))
   
-  write_parquet(business, business_out)
+  saveRDS(business, business_out)
 }
 
 # Reviews: stream in chunks, keep only the area's businesses
-if (!file.exists(review_out)) {
-  area_ids <- read_parquet(business_out, col_select = "business_id")$business_id
+if (overwrite || !file.exists(review_out)) {
+  area_ids <- readRDS(business_out)$business_id
   chunks <- list()
   
   print(system.time(
@@ -40,12 +41,14 @@ if (!file.exists(review_out)) {
       handler = function(df) {
         chunks[[length(chunks) + 1]] <<- df |>
           filter(business_id %in% area_ids) |>
-          # on changing select, delete reviews.parquet
+          # on changing select, set overwrite to TRUE
           select(business_id, user_id, stars, date, text, useful, funny, cool)
       })))
   
-  write_parquet(bind_rows(chunks), review_out)
+  saveRDS(bind_rows(chunks), review_out)
 }
 
-business <- read_parquet(business_out)
-reviews  <- read_parquet(review_out)
+no_text_out <- file.path(out_dir, "reviews_no_text.rds")
+if (overwrite || !file.exists(no_text_out)) {
+  saveRDS(select(readRDS(review_out), -text), no_text_out)
+}

@@ -2,9 +2,7 @@
 data/raw/
 *.tar
 *.zip
-data/new_orleans/business.parquet
-data/new_orleans/reviews.rds
-data/new_orleans/reviews.parquet
+data/*/reviews.rds
 
 # R artifacts
 .Rhistory
@@ -18,5 +16,5 @@ data/new_orleans/reviews.parquet
 # OS
 .DS_Store
 
-# temp. Remove after reviewing
+# temp. Remove when it's ready
 yelp_new_orleans_project.qmd
