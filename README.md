@@ -2,7 +2,7 @@
 
 Analysis of New Orleans restaurant reviews from the [Yelp Open Dataset](https://business.yelp.com/data/resources/open-dataset/), done in R.
 
-> **Status:** work in progress. The data import and filtering are complete. Cleaning, category analysis, spatial joins, and the final report are in progress.
+> **Status:** work in progress. The data import, filtering, and cleaning are complete. Category analysis, spatial joins, reviewer-normalized scores, the top-ten list, and the final report are in progress.
 
 ## Research question
 
@@ -12,25 +12,27 @@ What restaurants in New Orleans are best for dinner for a tourist family that in
 
 *TODO: two or three sentences stating the answer (the top 10 restaurants) and the main finding. Fill in after the analysis.*
 
-# Include interactive map.
-
 ## Files and folders
 
 ```         
 yelp-new-orleans-project/
 ├── README.md
-├── yelp_new_orleans_project.qmd   # main report (renders to HTML)
-├── RestaurantReviews.Rproj        # RStudio project file
+├── yelp_new_orleans_project.qmd        # main report (renders to HTML)
+├── RestaurantReviews.Rproj             # RStudio project file
+├── docs/
+│   └── yelp_new_orleans_project.html   # rendered report
 ├── data/
-│   ├── raw/                       # original Yelp JSON files (not committed)
-│   └── new_orleans/
-│       ├── business.rds           # filtered New Orleans businesses
-│       └── reviews_no_text.rds    # filtered reviews without the text column
+│   ├── raw/                            # original Yelp JSON files (not committed)
+│   └── LA/
+│       ├── business.rds                # filtered Louisiana businesses
+│       ├── reviews_no_text.rds         # filtered reviews without the text column
+│       ├── users.rds                   # filtered reviewer data
+│       └── neighborhoods.geojson       # New Orleans neighborhood boundaries
 ├── R/
-│   └── import.R                   # imports the large JSON files, filters, caches
-├── renv/                          # renv setup files
-├── renv.lock                      # package versions
-├── .Rprofile                      # activates renv
+│   └── import.R                        # imports the large JSON files, filters, caches
+├── renv/                               # renv setup files (activate.R, settings.json)
+├── renv.lock                           # package versions
+├── .Rprofile                           # activates renv
 └── .gitignore
 ```
 
@@ -42,17 +44,17 @@ yelp-new-orleans-project/
     - `yelp_academic_dataset_review.json`
 3.  Open the project in RStudio, restore packages with `renv::restore()`, and run `R/import.R`.
 
-The review file is about 5 GB, and parsing it takes roughly 8 to 10 minutes. `import.R` streams it in chunks, keeps only New Orleans businesses, and saves the result to `data/new_orleans/`. After that, every later step reads the small cached files.
+The review file is about 5 GB, and parsing it takes roughly 8 to 10 minutes. `import.R` streams it in chunks, keeps only Louisiana businesses, and saves the result to `data/LA/`. After that, every later step reads the small cached files.
 
 To run the project for another city, change `area_city`, `area_state`, and `out_dir` at the top of `R/import.R`, and make the necessary changes to the geographic area in the .qmd file.
 
 ## Why the raw data is not on GitHub
 
-The raw JSON files are several gigabytes, which is far above GitHub's 100 MB file limit. The filtered New Orleans files in `data/new_orleans/` are small enough to commit, and the steps above recreate everything else. Only business.rds and reviews_no_text.rds are in the repo; the full reviews with text are recreated by running R/import.R
+The raw JSON files are several gigabytes, which is far above GitHub's 100 MB file limit. The filtered New Orleans files in `data/LA/` are small enough to commit, and the steps above recreate everything else. The repo includes `business.rds`, `reviews_no_text.rds`, `users.rds`, and `neighborhoods.geojson`; the full reviews with text are recreated by running `R/import.R`.
 
 ## Report
 
-*TODO: link to the rendered HTML report once it is published.*
+*TODO: Publish a GitHub Page and link to it here.* [Rendered report](docs/yelp_new_orleans_project.html)
 
 ## Key findings
 
@@ -66,4 +68,4 @@ R, RStudio, Quarto. Packages: tidyverse, jsonlite, lubridate, sf, tigris, scales
 
 *TODO: update this*
 
-I used Claude (Anthropic) as a coding and troubleshooting assistant. Claude also drafted the structure of this README. The research question, category selection, analysis decisions, and conclusions are my own. I review and test all code before using it.
+I used Claude (Anthropic) as a coding and troubleshooting assistant. Claude also drafted the structure of this README and the report. The research question, category selection, analysis decisions, and conclusions are my own. I review and test all code before using it.
