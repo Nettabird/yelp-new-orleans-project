@@ -15,6 +15,4 @@ data/*/reviews.rds
 
 # OS
 .DS_Store
-
-# temp. Remove when it's ready
-yelp_new_orleans_project.qmd
+**/*.quarto_ipynb

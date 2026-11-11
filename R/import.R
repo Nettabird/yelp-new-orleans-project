@@ -12,6 +12,8 @@ business_file <- "data/raw/yelp_academic_dataset_business.json"
 review_file <- "data/raw/yelp_academic_dataset_review.json"
 business_out <- file.path(out_dir, "business.rds")
 review_out <- file.path(out_dir, "reviews.rds")
+user_file <- "data/raw/yelp_academic_dataset_user.json"
+user_out  <- file.path(out_dir, "users.rds")
 
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -51,4 +53,26 @@ if (overwrite || !file.exists(review_out)) {
 no_text_out <- file.path(out_dir, "reviews_no_text.rds")
 if (overwrite || !file.exists(no_text_out)) {
   saveRDS(select(readRDS(review_out), -text), no_text_out)
+}
+
+# Reviewers
+if (!file.exists(user_out)) {
+  reviewer_ids <- unique(reviews$user_id)
+  chunks <- list()
+  
+  print(system.time(
+    jsonlite::stream_in(
+      file(user_file),
+      pagesize = 100000,
+      verbose = FALSE,
+      handler = function(df) {
+        chunks[[length(chunks) + 1]] <<- df |>
+          filter(user_id %in% reviewer_ids) |>
+          # on changing select, set overwrite to TRUE
+          select(user_id, review_count, average_stars, yelping_since, useful, funny, cool, fans)
+      }
+    )
+  ))
+  
+  saveRDS(bind_rows(chunks), user_out)
 }

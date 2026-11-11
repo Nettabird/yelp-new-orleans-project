@@ -1,0 +1,536 @@
+---
+title: "New Orleans Restaurant Reviews: Yelp Open Dataset"
+author: "Dannette"
+date: today
+format:
+  html:
+    toc: true
+    code-fold: true
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+```{=html}
+<!-- PROJECT CHECKLIST: 
+
+- *** include the user file for more review(er)s ***
+
+- add why I included the whole state (to include the entire study area; possibly more reviews per reviewer; easier to change to another area),
+- add a search for "picky eater" and related phrases in the review text,
+- run and check all code,
+- add maps and other visuals
+-   maps including the study area and chosen geographic boundaries. Make them interactive. Google maps? 
+-   interactive where the user can choose between sets of categories, because different picky eaters are picky about different things. It was in the third chat. Claude should have it in memory, too.
+-   ask Claude for ideas
+- weight restaurants based on distance from the center of the study area,
+- fill in every TODO (search for "TODO"), 
+- render to HTML, 
+- remove the README status line, 
+- check files/folders in README against the repo, 
+- have Claude Opus check the whole project, 
+- remove the .gitignore line for the qmd file,
+- git add/status/commit/push, 
+- collect and submit AI prompts, 
+- renv::snapshot(), 
+- remove this comment -->
+
+<!-- possible additions:
+- include adventurous eaters in the research question? --> 
+```
+
+## Research question
+
+**TODO: make sure this is up to date.** What restaurants in New Orleans are best for dinner for a tourist family that includes picky eaters?
+
+**Answer:** TODO: one sentence naming the top 10, filled in after the analysis.
+
+## Setup
+
+```{r setup}
+library(tidyverse)
+library(lubridate)
+library(sf)
+library(tigris)
+library(scales)
+library(viridis)
+
+options(tigris_use_cache = TRUE)
+
+business <- readRDS("data/LA/business.rds")
+reviews  <- readRDS("data/LA/reviews_no_text.rds") |>
+  mutate(date = ymd_hms(date))
+users <- readRDS("data/LA/users.rds")
+```
+
+## Large-data management
+
+The Yelp review file is about 5 GB of newline-delimited JSON, too large to open comfortably in a normal R session.
+
+- **Download and extraction:** I downloaded the Yelp Open Dataset archive from <https://business.yelp.com/data/resources/open-dataset/> and extracted it, and the .tar inside, with macOS’s built-in Archive Utility and placed the two JSON files used in this project (`yelp_academic_dataset_business.json` and `yelp_academic_dataset_review.json`) in `data/raw/`.
+- **Storage:** the raw JSON files live in `data/raw/`, which is not committed to GitHub. Filtered outputs live in `data/LA/`.
+- **Import:** `jsonlite::stream_in()` reads the file in chunks of 100,000 reviews. A handler function filters each chunk to Louisiana restaurants before keeping it, so memory use stays low. Parsing the full file in one piece took about 355 seconds. For the reviewers, the handler filtered out friends, which was most of the data. Parsing that file took about 186 seconds.
+- **Caching:** the filtered result is saved as an RDS file, a compressed binary format that reads in seconds. Later runs use this filtered data instead of the entire dataset.
+- **GitHub limits:** the filtered reviews with text were 131 MB as RDS, above GitHub's 100 MB file limit. The repository includes a version without the `text` column instead.
+- **Problems and fixes:** The closest thing to a problem I experienced was the length of time that the import took, which was about 6 minutes. I did not consider it necessary to try to make it faster.
+
+```{r import-code}
+#| file: R/import.R
+#| eval: false
+```
+
+## Data overview
+
+```{r overview}
+tibble(
+  table = c("Businesses", "Reviews"),
+  rows = c(nrow(business), nrow(reviews))
+) |>
+  knitr::kable(format.args = list(big.mark = ","))
+```
+
+## Study area
+
+The study area is the New Orleans tourist core and surrounding area, so I select restaurants within a little over 6 miles of the French Quarter, the main tourist district of New Orleans. The study area then includes New Orleans City Park, which contains the New Orleans Museum of Art and the Louisiana Children's Museum, both places that families are likely to visit.
+
+I determined the study area by locating the French Quarter on Google Earth and using the measuring tool to visualize what is within about 5-6 miles or 8000-10000 meters. (TODO: fix this) I chose 5-6 miles based on the distance and time my own family is typically willing to drive in a metro area in order to find a restaurant that works for all of us (less than 30 minutes), and confirmed that it would probably take less than about a half hour by getting directions to a few places around the study area in Google Maps with a "leave at" time of 4:30 pm from Jackson Park (in the heart of the French Quarter).
+
+*TODO* Add a map with a circle outlining the study area.
+
+```{r study-area}
+center   <- st_sfc(st_point(c(-90.0629, 29.9574)), crs = 4326)  # Jackson Square, the heart of the French Quarter
+radius_m <- 10000                                                # about 6.2 miles
+
+restaurants <- business |>
+  filter(
+    !is.na(latitude), !is.na(longitude),
+    str_detect(categories, regex("Restaurants", ignore_case = TRUE))
+  ) |>
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326, remove = FALSE) |>
+  st_filter(center, .predicate = st_is_within_distance, dist = radius_m) |>
+  st_drop_geometry()
+
+tibble(
+  louisiana_restaurants = nrow(business),
+  study_area_restaurants = nrow(restaurants)
+) |>
+  knitr::kable(format.args = list(big.mark = ","))
+```
+
+## Restaurant categories
+
+I keep businesses with "Restaurants" in their category list, then split the category list so each business has one row per category.
+
+I also leave the broadest categories ("Restaurants", "Food", "Nightlife", "Bars") off the list, since they crowd out more specific cuisine categories, without removing the restaurants themselves from consideration.
+
+```{r categories}
+#| fig-height: 12
+
+rest_cats <- restaurants |>
+  select(business_id, categories) |>
+  separate_longer_delim(categories, delim = ", ") |>
+  rename(category = categories)
+
+excl_cats <- c("Restaurants", "Food", "Nightlife", "Bars")
+
+cat_counts <- rest_cats |>
+  filter(!category %in% excl_cats) |>
+  count(category, sort = TRUE)
+
+cat_counts |>
+  slice_head(n = 35) |>
+  mutate(category = fct_reorder(category, n)) |>
+  ggplot(aes(n, category)) +
+  geom_col(fill = mako(1, begin = 0.6)) +
+  labs(title = "Most common restaurant categories in New Orleans",
+       x = "Number of restaurants", y = NULL) +
+  theme_minimal(base_size = 16)
+```
+
+### Category co-occurrence
+
+How often do two categories appear on the same restaurant? Categories that overlap heavily are good candidates for a related group.
+
+```{r cooccurrence}
+#| fig-height: 10
+#| fig-width: 12
+
+top_cats <- cat_counts |> slice_head(n = 35) |> pull(category)
+
+cooc <- rest_cats |>
+  filter(category %in% top_cats) |>
+  inner_join(
+    rest_cats |> filter(category %in% top_cats),
+    by = "business_id",
+    relationship = "many-to-many"
+  ) |>
+  rename(cat_a = category.x, cat_b = category.y) |>
+  filter(cat_a != cat_b) |>
+  count(cat_a, cat_b)
+
+ggplot(cooc, aes(cat_a, cat_b, fill = n)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(title = "Category co-occurrence (top 35 categories)",
+       x = NULL, y = NULL, fill = "Restaurants") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+top15 <- cat_counts |> slice_head(n = 15) |> pull(category)
+
+cooc |>
+  filter(cat_a %in% top15, cat_b %in% top15) |>
+  mutate(cat_a = factor(cat_a, levels = top15),
+         cat_b = factor(cat_b, levels = top15)) |>
+  ggplot(aes(cat_a, cat_b, fill = n)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = n), size = 5) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(title = "Category co-occurrence (top 15 categories)",
+       x = NULL, y = NULL, fill = "Restaurants") +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Selected category group
+
+**TODO: choose at least three related categories from the counts above and defend the choice using the co-occurrence results.** 
+
+This is to check the exact spelling against `cat_counts`:
+
+```{r selected-group}
+dinner_cats <- c("American (Traditional)", "Barbeque", "Burgers", "Fast Food", "Italian", "Mexican", "Pizza", "Southern")
+other_cats <- c("Bakeries", "Breakfast & Brunch", "Cafes", "Coffee & Tea", "Desserts", "Sandwiches")
+
+cat_counts |> filter(category %in% dinner_cats)
+cat_counts |> filter(category %in% other_cats)
+
+dinner_group_ids <- rest_cats |>
+  filter(category %in% dinner_cats) |>
+  distinct(business_id)
+
+other_group_ids <- rest_cats |>
+  filter(category %in% other_cats) |>
+  distinct(business_id)
+
+dinner_group <- restaurants |> semi_join(dinner_group_ids, by = "business_id")
+nrow(dinner_group)
+```
+
+**TODO: check this code over, add explanation: co-occurrence for the selected categories, in order to narrow them down a bit.**
+
+```{r dinner-categories}
+#| fig-height: 8
+#| fig-width: 10
+
+dinner_cat_counts <- cat_counts |> filter(category %in% dinner_cats)
+
+dinner_cat_counts |>
+  mutate(category = fct_reorder(category, n)) |>
+  ggplot(aes(n, category)) +
+  geom_col(fill = mako(1, begin = 0.6)) +
+  labs(title = "Dinner categories",
+       x = "Number of restaurants", y = NULL) +
+  theme_minimal(base_size = 16)
+
+dinner_order <- dinner_cat_counts$category   # already sorted, most common first
+
+dinner_cooc <- rest_cats |>
+  filter(category %in% dinner_cats) |>
+  inner_join(
+    rest_cats |> filter(category %in% dinner_cats),
+    by = "business_id",
+    relationship = "many-to-many"
+  ) |>
+  rename(cat_a = category.x, cat_b = category.y) |>
+  filter(cat_a != cat_b) |>
+  count(cat_a, cat_b)
+
+dinner_cooc |>
+  mutate(cat_a = factor(cat_a, levels = dinner_order),
+         cat_b = factor(cat_b, levels = dinner_order)) |>
+  ggplot(aes(cat_a, cat_b, fill = n)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = n), size = 5) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(title = "Co-occurrence of dinner categories",
+       x = NULL, y = NULL, fill = "Restaurants") +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+## Geographic systems
+
+The most relevant geographically-related question for a family looking for dinner is how long it will take to get there. Because travel times depend on factors far outside the scope of this project, I use distance as a proxy. I compare two ways to do this: 1. zero in on a particular area and look at restaurants there, and 2. look at restaurants within a certain distance from the center of the study area.
+
+### Boundary systems
+
+I compare several boundary systems: census tracts and ZIP code tabulation areas from the US Census Bureau, Neighborhood Statistical Areas from the City of New Orleans, and concentric rings around Jackson Park in the French Quarter. Each restaurant point is assigned to a boundary with a spatial join, and I keep only the boundaries that touch the study area. The neighborhood boundaries cover only Orleans Parish, so restaurants elsewhere in the study area, such as Metairie, have no neighborhood. The table below counts them as unmatched.
+
+```{r boundaries}
+circle <- st_buffer(center, radius_m)
+
+group_sf <- dinner_group |>
+  filter(!is.na(latitude)) |>
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326, remove = FALSE)
+
+tracts_sf <- tracts("LA", cb = TRUE, year = 2022) |>
+  st_transform(4326) |>
+  select(area_id = starts_with("GEOID")) |>
+  st_filter(circle, .predicate = st_intersects)
+
+zips_sf <- zctas(cb = TRUE, starts_with = c("700", "701"), year = 2020) |>
+  st_transform(4326) |>
+  select(area_id = starts_with("GEOID")) |>
+  st_filter(circle, .predicate = st_intersects)
+
+nsa_file <- "data/LA/neighborhoods.geojson"
+
+if (!file.exists(nsa_file)) {
+  nsa_url <- "https://maps.nola.gov/server/rest/services/Reference/Reference_Layers/MapServer/0/query?where=1%3D1&outFields=*&f=geojson"
+  st_read(nsa_url, quiet = TRUE) |>
+    st_transform(4326) |>
+    select(area_id = GNOCDC_LAB) |>
+    st_write(nsa_file)
+}
+
+nsa_sf <- st_read(nsa_file, quiet = TRUE) |>
+  st_filter(circle, .predicate = st_intersects)
+
+join_area <- function(points, polys) {
+  st_join(points, polys, join = st_within, left = FALSE)
+}
+
+by_tract <- join_area(group_sf, tracts_sf)
+by_zip   <- join_area(group_sf, zips_sf)
+by_nsa   <- join_area(group_sf, nsa_sf)
+
+summarize_system <- function(joined, polys, label) {
+  per_area <- joined |> st_drop_geometry() |> count(area_id)
+  tibble(
+    system = label,
+    areas_in_system = nrow(polys),
+    areas_with_group_restaurants = nrow(per_area),
+    median_restaurants_per_area = median(per_area$n),
+    smallest_count = min(per_area$n),
+    largest_count = max(per_area$n),
+    areas_under_5 = sum(per_area$n < 5),
+    unmatched = nrow(group_sf) - nrow(joined)
+  )
+}
+
+bind_rows(
+  summarize_system(by_tract, tracts_sf, "Census tract"),
+  summarize_system(by_zip, zips_sf, "ZIP code"),
+  summarize_system(by_nsa, nsa_sf, "Neighborhood")
+) |>
+  knitr::kable()
+
+bind_rows(
+  by_tract |> st_drop_geometry() |> count(area_id) |> mutate(system = "Census tract"),
+  by_zip   |> st_drop_geometry() |> count(area_id) |> mutate(system = "ZIP code")
+) |>
+  ggplot(aes(n)) +
+  geom_histogram(binwidth = 2) +
+  facet_wrap(~system, ncol = 1, scales = "free_y") +
+  labs(x = "Restaurants per area", y = "Number of areas")
+```
+
+### Choice of boundary system
+
+**TODO: Add count maps for all three systems, plus a paragraph on sparse areas and unmatched restaurants. Move the 70130 breakdown here and write which boundary system advances to the comparison, with your reasons.**
+
+For the localized area system, I chose to use zip codes with distance from the French Quarter. 70130 having so many is not ideal, but enough of the others have a more reasonable amount that overall, zip codes are the most useful system for this analysis.
+
+I rejected the neighborhoods option due to many restaurants being outside of New Orleans city/parish limits; some of the other cities contained too many restaurants for a good comparison. I would have to pull neighborhoods for each city; there are other options that are more useful and take less time.
+
+### Localized areas vs concentric rings
+
+**TODO: Use the boxplot as evidence of how much distance each ZIP mixes together, and the ring density plot as evidence of how restaurants thin out with distance. Then write a short paragraph comparing approaches: ZIPs are recognizable to a reader, while rings measure distance consistently. Also mention how the outer zip codes only contain restaurants within the study area, so they'll look like they have fewer restaurants than they actually do and they'll appear to cover a greater area.**
+
+``` {r concentric-circles}
+# one row per restaurant, with distance from Jackson Square in km
+rest_dist <- by_zip |>
+  mutate(dist_km = as.numeric(st_distance(geometry, center)) / 1000) |>
+  st_drop_geometry()
+
+# Spread of distances within each ZIP, ordered by median
+rest_dist |>
+  mutate(area_id = fct_reorder(area_id, dist_km, .fun = median)) |>
+  ggplot(aes(dist_km, area_id)) +
+  geom_boxplot() +
+  labs(x = "Distance from Jackson Square (km)", y = "ZIP code")
+
+n_rings <- 12
+
+# ring boundaries: quantiles of distance, so each ring holds about the same number of restaurants
+breaks <- quantile(rest_dist$dist_km, probs = seq(0, 1, length.out = n_rings + 1))
+breaks[1] <- 0   # the innermost ring starts at the center
+
+ring_summary <- rest_dist |>
+  mutate(ring = cut(dist_km, breaks, include.lowest = TRUE)) |>
+  count(ring) |>
+  mutate(r_in = head(breaks, -1),
+         r_out = tail(breaks, -1),
+         area_km2 = pi * (r_out^2 - r_in^2),
+         density = n / area_km2)
+
+ring_summary  # check that n is roughly equal across rings
+
+ggplot(ring_summary, aes(ring, density)) +
+  geom_col() +
+  labs(x = "Distance band from Jackson Square (km)",
+       y = "Restaurants per square km") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r zip-distance}
+zip_dist <- by_zip |>
+  mutate(dist_m = as.numeric(st_distance(geometry, center))) |>
+  st_drop_geometry() |>
+  group_by(area_id) |>
+  summarise(n = n(), median_dist_km = median(dist_m) / 1000) |>
+  arrange(median_dist_km)
+
+knitr::kable(zip_dist, digits = 1)
+
+zip_dist |>
+  mutate(area_id = fct_reorder(area_id, median_dist_km)) |>
+  ggplot(aes(median_dist_km, area_id, size = n)) +
+  geom_point() +
+  labs(x = "Median distance of restaurants from Jackson Square (km)",
+       y = "ZIP code", size = "Restaurants")
+
+zips_sf |>
+  inner_join(zip_dist, by = "area_id") |>
+  ggplot() +
+  geom_sf(aes(fill = median_dist_km), color = "white") +
+  geom_sf_text(aes(label = area_id), size = 2.5, check_overlap = TRUE, color = "white") +
+  scale_fill_viridis_c(direction = -1) +
+  labs(fill = "Median km\nfrom center")
+
+by_zip |>
+  st_drop_geometry() |>
+  filter(area_id == "70130") |>
+  select(area_id, business_id) |>
+  inner_join(rest_cats, by = "business_id") |>
+  filter(category %in% dinner_cats) |>
+  count(area_id, category, sort = TRUE) |>
+  rename(Zip = area_id, Category = category, Count = n)
+```
+
+### Final geographic choice
+
+**TODO: choose one system and justify it.** Consider how many areas contain restaurants, how many restaurants fall in each area, and which unit a reader recognizes. 
+
+**TODO** Then set `final_polys` and `final_join` below.
+
+```{r final-geography}
+final_polys <- zips_sf
+final_join  <- by_zip
+
+n_areas <- n_distinct(final_join$area_id)
+```
+
+The selected category group has restaurants in **`r n_areas`** different areas, which meets the requirement of at least 10. 
+
+```{r area-map}
+area_counts <- final_join |>
+  st_drop_geometry() |>
+  count(area_id)
+
+final_polys |>
+  inner_join(area_counts, by = "area_id") |>
+  ggplot() +
+  geom_sf(aes(fill = n), color = "white") +
+  scale_fill_viridis_c() +
+  labs(title = "Restaurants in the selected category group, by area",
+       fill = "Restaurants")
+```
+
+## Normalized reviewer scores
+
+Some reviewers rate everything highly and others rarely give five stars. To adjust for this, each review is compared with that reviewer's own average rating across all New Orleans reviews in the data. The normalized score of a review is its stars minus the reviewer's mean.
+
+Reviews I exclude, and why:
+
+- Reviewers with fewer than 5 reviews in the data, because few ratings cannot establish a baseline.
+- Restaurants with fewer than 30 reviews, because averages from a handful of reviews are unreliable.
+
+```{r scores}
+min_user_reviews <- 5
+min_biz_reviews  <- 30
+
+scored <- reviews |>
+    semi_join(dinner_group, by = "business_id") |>
+    left_join(
+      users |> select(user_id, user_mean = average_stars, user_n = review_count),
+      by = "user_id"
+    ) |>
+    filter(user_n >= min_user_reviews) |>
+    mutate(norm_stars = stars - user_mean)
+
+scores <- scored |>
+  group_by(business_id) |>
+  summarise(
+    n_reviews = n(),
+    raw_mean  = mean(stars),
+    norm_mean = mean(norm_stars)
+  ) |>
+  filter(n_reviews >= min_biz_reviews)
+
+ggplot(scores, aes(raw_mean, norm_mean)) +
+  geom_point(alpha = 0.6, color = viridis(1, begin = 0.4)) +
+  labs(title = "Raw average stars versus reviewer-normalized score",
+       x = "Raw average stars",
+       y = "Average stars above or below reviewer's own mean")
+```
+
+## Top 10 restaurants
+
+**TODO: make choices; fill in.**
+
+```{r top10}
+top10 <- scores |>
+  slice_max(norm_mean, n = 10) |>
+  mutate(rank = row_number()) |>
+  left_join(dinner_group |> select(business_id, name, address), by = "business_id")
+
+top10 |>
+  select(rank, name, address, n_reviews, raw_mean, norm_mean) |>
+  knitr::kable(digits = 2)
+```
+
+```{r top10-map}
+top10_sf <- group_sf |>
+  select(business_id) |>
+  inner_join(top10 |> select(business_id, rank), by = "business_id")
+
+bb <- st_bbox(group_sf)
+
+ggplot() +
+  geom_sf(data = final_polys, fill = "grey95", color = "grey60") +
+  geom_sf(data = top10_sf, size = 6, color = viridis(1, begin = 0.4)) +
+  geom_sf_text(data = top10_sf, aes(label = rank), color = "white", size = 3) +
+  coord_sf(xlim = bb[c("xmin", "xmax")], ylim = bb[c("ymin", "ymax")]) +
+  labs(title = "Top 10 restaurants by reviewer-normalized score",
+       subtitle = "Numbers match the rank in the table")
+```
+
+## Findings
+
+**TODO: two or three findings a nontechnical reader can understand.** Ideas to check against your results: whether the raw top 10 differs from the normalized top 10, where the top restaurants cluster, and how much reviewer generosity changes the ranking.
+
+## Limitations
+
+- Each reviewer's baseline uses only their Louisiana reviews in this dataset, not their full Yelp history.
+- Yelp reviews are not a random sample of diners, and the Yelp Open Dataset is a curated dataset.
+- TODO add any limitations you found.
+
+## Session information
+
+```{r session}
+sessionInfo()
+```
