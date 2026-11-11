@@ -54,7 +54,7 @@ The raw JSON files are several gigabytes, which is far above GitHub's 100 MB fil
 
 ## Report
 
-*TODO: Publish a GitHub Page and link to it here.* [Rendered report](docs/yelp_new_orleans_project.html)
+[Rendered report](https://nettabird.github.io/yelp-new-orleans-project/yelp_new_orleans_project.html)
 
 ## Key findings
 
