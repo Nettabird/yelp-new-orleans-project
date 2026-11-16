@@ -8,7 +8,7 @@ What restaurants in New Orleans are best for a tourist family that includes pick
 
 ## Executive summary
 
-
+This project uses the Yelp Open Dataset to find restaurants in and around New Orleans that suit a tourist family with picky eaters. I identified likely candidates by searching reviews for mentions of picky kids and by selecting related restaurant categories, grouped them by ZIP code, and ranked them with a score that adjusts for how generously each reviewer rates. The report lists the top 10 restaurants in each of 16 ZIP codes; adjusting for reviewer habits mostly confirms Yelp’s average ratings, and families have plenty of good options across the city.
 
 ## Files and folders
 
@@ -18,24 +18,27 @@ yelp-new-orleans-project/
 ├── yelp_new_orleans_project.qmd        # main report (renders to HTML)
 ├── RestaurantReviews.Rproj             # RStudio project file
 ├── docs/
-│   └── yelp_new_orleans_project.html   # rendered report
+│   ├── yelp_new_orleans_project.html   # rendered report (GitHub Pages)
+│   └── figures/                        # copy of the report figures, made by Quarto
+├── figures/
+│   └── top10_map.png                   # map of the top 10 restaurants
 ├── data/
 │   ├── raw/                            # original Yelp JSON files (not committed)
 │   └── LA/
-│       ├── business.rds                # filtered Louisiana businesses
-│       ├── neighborhoods.geojson       # New Orleans neighborhood boundaries
-│       ├── picky_mentions.rds          # review matches for picky-eater phrases
+│       ├── business.rds                # filtered Louisiana restaurants
+│       ├── reviews_no_text.rds         # their reviews, without the text column
+│       ├── reviews.rds                 # their reviews with text (not committed; made by import.R)
+│       ├── users.rds                   # reviewer data (not used in the report)
+│       ├── reviewer_all_reviews.rds    # all dataset reviews by those reviewers (not used in the report)
+│       ├── picky_mentions.rds          # reviews matching picky-eater phrases
 │       ├── picky_sample.csv            # hand-labeled sample of phrase matches
-│       ├── reviews_no_text.rds         # filtered reviews without the text column
 │       ├── top10.rds                   # saved top 10 results for the report summary
-│       └── users.rds                   # filtered reviewer data
-├── figures                             # figures for the report
-│   └── top10_map.png                   # map of the top 10 restaurants
+│       └── neighborhoods.geojson       # New Orleans neighborhood boundaries
 ├── R/
 │   ├── config.R                        # shared settings: area, file paths, study area, boundaries
-│   ├── explore_reviews.R               # optional: shows review text for restaurants in the final ZIP codes. Import first.
 │   ├── import.R                        # imports the large JSON files, filters, caches
-│   └── picky_search.R                  # searches review text for picky-eater phrases, caches matches
+│   ├── picky_search.R                  # searches review text for picky-eater phrases, caches matches
+│   └── explore_reviews.R               # optional: review text for restaurants in the final ZIP codes
 ├── renv/                               # renv setup files (activate.R, settings.json)
 ├── renv.lock                           # package versions
 ├── .Rprofile                           # activates renv
@@ -78,4 +81,4 @@ R, RStudio, Quarto. Packages: tidyverse, jsonlite, lubridate, sf, tigris, scales
 
 ## AI assistance
 
-I used Claude (Anthropic) as a coding and troubleshooting assistant. Claude also drafted the initial structure of the report and this README. The research question, category selection and other analysis decisions, discussion, and conclusions are my own. I review and test all code before using it.
+I used Claude (Anthropic) as a coding and troubleshooting assistant. Claude also drafted the initial structure of the report and this README, as well as the executive summary for the README. The research question; category selection, conclusions, and other analysis decisions; and discussion are my own. I review and test all code before using it.
