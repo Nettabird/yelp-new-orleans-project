@@ -8,7 +8,7 @@ What restaurants in New Orleans are best for a tourist family that includes pick
 
 ## Executive summary
 
-This project uses the Yelp Open Dataset to find restaurants in and around New Orleans that suit a tourist family with picky eaters. I identified likely candidates by searching reviews for mentions of picky kids and by selecting related restaurant categories, grouped them by ZIP code, and ranked them with a score that adjusts for how generously each reviewer rates. The report lists the top 10 restaurants in each of 16 ZIP codes; adjusting for reviewer habits mostly confirms Yelp’s average ratings, and families have plenty of good options across the city.
+This project uses the Yelp Open Dataset to find restaurants in and around New Orleans that suit a tourist family with picky eaters. I identified likely candidates by searching reviews for mentions of picky kids and by selecting related restaurant categories, grouped them by ZIP code, and ranked them with a score that adjusts for how generously each reviewer rates. The report lists the top 10 restaurants in each of 14 ZIP codes; adjusting for reviewer habits mostly confirms Yelp’s average ratings, and families have plenty of good options across the city.
 
 ## Files and folders
 
@@ -60,7 +60,7 @@ To run the project for another city, change `area_state` and `out_dir` in the co
 
 ## Why the raw data is not on GitHub
 
-The raw JSON files are several gigabytes, far above GitHub’s 100 MB file limit. The filtered files in data/LA/ are small enough to commit: `business.rds`, `reviews_no_text.rds`, `users.rds`, `neighborhoods.geojson`, `picky_mentions.rds`, `picky_sample.csv`, and `top10.rds`. The full reviews with text are recreated by running `R/import.R`, and the phrase matches by running `R/picky_search.R`. `picky_sample.csv` contains hand-labeled data and cannot be regenerated.
+The raw JSON files are several gigabytes, far above GitHub’s 100 MB file limit. The filtered files in data/LA/ are small enough to commit: `business.rds`, `reviews_no_text.rds`, `reviewer_all_reviews.rds`, `users.rds`, `neighborhoods.geojson`, `picky_mentions.rds`, `picky_sample.csv`, and `top10.rds`. The full reviews with text are recreated by running `R/import.R`, and the phrase matches by running `R/picky_search.R`. `picky_sample.csv` contains hand-labeled data and cannot be regenerated.
 
 ## Report
 
@@ -72,8 +72,12 @@ The raw JSON files are several gigabytes, far above GitHub’s 100 MB file limit
   - "Picky kid" is the only one I found useful.
   - "Picky eater" also shows up a lot in the data, but it's too often inside phrases like "I'm not a picky eater, but the food here is terrible!"
   - Other phrases were not correlated closely enough with positive reviews related to picky eaters to be any use.
-- 16 ZIP codes, covering a large portion of New Orleans and the nearby area, contained 10 or more likely candidates. This suggests a tourist family has plenty of options even if some or all of them are picky eaters.
+- 14 ZIP codes, covering a large portion of New Orleans and the nearby area, contained 10 or more likely candidates. This suggests a tourist family has plenty of options even if some or all of them are picky eaters.
 - Adjusting for reviewer activity doesn't change rankings much...for the most part. Looking only at the Yelp average rating is still a pretty good measure of what people actually thought about it, regardless of how many stars they tend to be willing to give on average.
+
+Top 10 restaurants in each ZIP code, colored by adjusted score
+
+![Map of the top 10 restaurants in each ZIP code, colored by adjusted score](figures/top10_map.png)
 
 ## Tools
 

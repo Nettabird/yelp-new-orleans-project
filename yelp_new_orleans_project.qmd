@@ -17,7 +17,7 @@ execute:
 
 What restaurants in New Orleans are best for a tourist family that includes picky eaters?
 
-Answer in the tables and map below. The tables show the 10 best candidates for picky eaters in each of the 7 ZIP codes containing the most candidates; the restaurants in all 16 ZIPs with at least 10 candidates are plotted on the map below.
+Answer in the tables and map below. The tables show the 10 best candidates for picky eaters in each of the 7 ZIP codes containing the most candidates; the restaurants in all 14 ZIPs with at least 10 candidates are plotted on the map below.
 
 ::: panel-tabset
 ```{r answer}
@@ -59,8 +59,8 @@ options(tigris_use_cache = TRUE)
 business <- readRDS(business_out)
 reviews  <- readRDS(no_text_out) |>
   mutate(date = ymd_hms(date))
-users <- readRDS(user_out)
-reviewer_reviews <- readRDS(reviewer_reviews_out)
+# users <- readRDS(user_out)
+# reviewer_reviews <- readRDS(reviewer_reviews_out)
 ```
 
 ## Large-data management
@@ -153,7 +153,7 @@ all_reviewer_summary <- reviews |>
 
 ## Picky-eater search
 
-`picky_search.R` pulls restaurant reviews containing phrases likely to indicate that a restaurant is good for picky eaters, collects a 100-character snippet from each review containing each phrase, and exports 50 random snippets per phrase. I manually marked whether each snippet seemed to indicate that the restaurant did work for a picky eater, then used the resulting table to choose phrases that are actually relevant to picky eaters.
+`picky_search.R` pulls restaurant reviews containing phrases likely to indicate that a restaurant is good for picky eaters, collects a 200-character snippet from each review containing each phrase, and exports 50 random snippets per phrase. I manually marked whether each snippet seemed to indicate that the restaurant did work for a picky eater, then used the resulting table to choose phrases that are actually relevant to picky eaters.
 
 I was surprised at how useless most of the phrases turned out to be. Even "picky eater" had far fewer relevant hits than I was expecting. But it does make sense that "picky kid" would be more relevant; I'd expect parents to be more likely to mention in a review the unusual event that a restaurant works for their picky kids than to mention the common one (that it doesn't). For this reason and because there were not many mentions of key phrases in the data, I added some categories by hand in the category analysis (American (Traditional), Barbeque, Burgers, Diners, Fast Food, Italian, Mexican, Pizza, and Southern). I also chose not to restrict the search based on the number of reviews a particular Yelp user had given. (See [Normalized reviewer scores](#normalized-reviewer-scores), below.)
 
@@ -325,9 +325,27 @@ selected_cats <- overlap |>
   filter(max_jaccard >= 0.05) |>
   pull(cat_a)
 
+# exclusions table with reasons
+exclusions <- tribble(
+  ~business_id,                ~name,                         ~reason,
+  "YIWBvaCSeIKLcXAQWkvz9w",   "Bonafried",                    "Food truck with no address",
+  "_C7QiQQc47AOEv4PE3Kong",   "Commander's Palace",           "Formal dining with dress code",
+  "UmjITdXHhEF46ho6IhaGQg",   "Dave & Buster's",              "Arcade and sports bar",
+  "nGYXglmKHgUcovuTHIg6_A",   "Food Drunk Food Truck",        "Food truck with no address",
+  "nk96iwJV1_p2HECYQW1ysA",   "French Quarter Phantoms",      "Tour company, not a restaurant",
+  "yvh5qUSAbjMnvYy_HrATdQ",   "Hooters",                      "Adult-oriented bar",
+  "OyF6c2he3Aej9itlH8oz-A",   "Jewel of the South",           "Cocktail bar; not good for picky eaters",
+  "9kv9JpLhzkN3UeWZDrsmEA",   "The Country Club",             "Adult-oriented venue and bar",
+  "girDKh9waA2VA81x4h02Lw",   "Main Squeeze Juice Co.",       "Juice bar",
+  "PPow3qO48buSNaEkQ_us_w",   "Nola Mia Gelato Cafe",         "Dessert place",
+  "2Sgt5ekJ7F785czScIZEYg",   "Piccola Gelateria",            "Dessert place",
+  "aWrfoWJFBVQcgMVaD6Bvyw",   "Stop Jockin Snoballs",         "Dessert place"
+)
+
 # candidate restaurants
 picky_group <- eligible |>
-  semi_join(filter(rest_cats, category %in% selected_cats), by = "business_id")
+  semi_join(filter(rest_cats, category %in% selected_cats), by = "business_id") |>
+  anti_join(exclusions, by = "business_id")
 
 dropped_cats <- setdiff(candidate_cats, selected_cats)
 dropped_text <- if (length(dropped_cats) > 0) str_flatten_comma(dropped_cats) else "none"
@@ -342,6 +360,16 @@ I kept businesses with "Restaurants" in their category list, trimmed extra white
 3.  Categories that share many restaurants describe similar places. I kept a candidate if its Jaccard overlap (restaurants in both categories divided by restaurants in either) with at least one other candidate was 0.05 or more.
 
 The final selection is `r str_flatten_comma(sort(selected_cats))`. Of these, `r str_flatten_comma(sort(intersect(selected_cats, rule_cats)))` came from the “picky kid” search.
+
+A restaurant is a candidate if it is open, is not marked by Yelp as not good for kids (restaurants with no value for that attribute are kept), has at least `r min_biz_reviews` reviews, belongs to at least one of the selected categories, and is not on the exclusion list below. `r nrow(picky_group)` restaurants in the study area meet these criteria.
+
+I removed `r nrow(exclusions)` businesses by hand that matched a selected category but do not fit the question: businesses that are not restaurants, food trucks with no address, bars and adult-oriented venues, formal dining, and places that serve only desserts or juice.
+
+```{r exclusions-table}
+exclusions |>
+  select(name, reason) |>
+  knitr::kable(col.names = c("Restaurant", "Reason removed"))
+```
 
 The tabs below show each category’s mention rate (selected categories are right of the dashed line or added by judgment), the overlap among candidates (color is the Jaccard value, numbers are shared restaurants, and the diagonal is each category’s size), and the 10 most-overlapping pairs.
 
@@ -537,7 +565,7 @@ boundary_map <- function(sys, label_ids = NULL) {
 }
 ```
 
-The maps below show the system boundaries as white lines, with the study area outlined in red. The first tab shows the census tracts; the second shows neighborhoods, including that they do not cover the entire study area; the third shows the 16 ZIP codes that have at least 10 restaurants that meet the study criteria.
+The maps below show the system boundaries as white lines, with the study area outlined in red. The first tab shows the census tracts; the second shows neighborhoods, including that they do not cover the entire study area; the third shows the 14 ZIP codes that have at least 10 restaurants that meet the study criteria.
 
 ::: panel-tabset
 #### Census tracts
@@ -559,8 +587,8 @@ boundary_map("Neighborhood")
 ```{r}
 #| fig-height: 7
 boundary_map("ZIP code", label_ids = c("70001", "70005", "70053", "70056", "70058", "70112",
-                                       "70113", "70115", "70116", "70117", "70118", "70119",
-                                       "70122", "70124", "70125", "70130"))
+                                       "70115", "70116", "70117", "70118", "70119", "70124",
+                                       "70125", "70130"))
 ```
 :::
 
@@ -819,7 +847,7 @@ The comparison shows:
 
 - the difference between "All reviews" and "Active reviews". The share of reviews from active users swings from 5% to 58% just in the top 10 restaurants by adjusted rank (over all ZIP codes). I included it for curiosity's sake; future work could include some analysis.
 
-(Notes: the two Waffle Houses in the second table are different locations; restaurants can share a rank if they have the same average rating or adjusted score.)
+(Notes: the two Waffle Houses in the third table are different locations; restaurants can share a rank if they have the same average rating or adjusted score.)
 
 ::: panel-tabset
 #### Top 20 by original Yelp average rating
@@ -852,7 +880,7 @@ ggplot(restaurant_scores, aes(raw_mean, adj_score, size = n_active)) +
 ```
 :::
 
-The vast majority of restaurants (273) changed rank by no more than 50. Only 51 restaurants moved by more than 100. As mentioned above, there appear to be more chain restaurants among the biggest movers.
+The majority of restaurants (273) changed rank by less than 50. Only 51 restaurants moved by more than 100. As mentioned above, there appear to be more chain restaurants among the biggest movers.
 
 ```{r movers}
 # show restaurants that moved by various amounts
@@ -878,7 +906,6 @@ mover_counts |>
 ```{r movers-restaurants}
 #| include: false
 # These are the restaurants that moved by more than 50 points, and those that moved by more than 100.
-# I did not find a recognizable difference between restaurants that moved significantly and those that didn't.
 chain_names <- business |> count(name) |> filter(n >= 3) |> pull(name)
 
 movers_info <- restaurant_scores |>
@@ -994,8 +1021,8 @@ ggsave("figures/top10_map.png", top10_map, width = 7, height = 7)
   - "Picky kid" is the only one I found useful.
   - "Picky eater" also shows up a lot in the data, but it's too often inside phrases like "I'm not a picky eater, but the food here is terrible!"
   - Other phrases were not correlated closely enough with positive reviews related to picky eaters to be any use.
-- 16 ZIP codes, covering a large portion of New Orleans and the nearby area, contained 10 or more likely candidates. This suggests a tourist family has plenty of options even if some or all of them are picky eaters.
-- Adjusting for reviewer activity doesn't change rankings much...for the most part. Looking only at the Yelp average rating is still a pretty good measure of what people actually thought about it, regardless of how many stars they tend to be willing to give on average.
+- 14 ZIP codes, covering a large portion of New Orleans and the nearby area, contained 10 or more likely candidates. This suggests a tourist family has plenty of options even if some or all of them are picky eaters.
+- Adjusting for reviewer activity doesn't change most rankings much...for the most part. Looking only at the Yelp average rating is still a pretty good measure of what people actually thought about it, regardless of how many stars they tend to be willing to give on average.
 
 ## Limitations
 
