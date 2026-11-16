@@ -2,15 +2,13 @@
 
 Analysis of New Orleans restaurant reviews from the [Yelp Open Dataset](https://business.yelp.com/data/resources/open-dataset/), done in R.
 
-> **Status:** work in progress. The data import, filtering, and cleaning are complete. Category analysis, spatial joins, reviewer-normalized scores, the top-ten list, and the final report are in progress.
-
 ## Research question
 
-What restaurants in New Orleans are best for dinner for a tourist family that includes picky eaters?
+What restaurants in New Orleans are best for a tourist family that includes picky eaters?
 
 ## Executive summary
 
-*TODO: two or three sentences stating the answer (the top 10 restaurants) and the main finding. Fill in after the analysis.*
+
 
 ## Files and folders
 
@@ -25,11 +23,19 @@ yelp-new-orleans-project/
 │   ├── raw/                            # original Yelp JSON files (not committed)
 │   └── LA/
 │       ├── business.rds                # filtered Louisiana businesses
+│       ├── neighborhoods.geojson       # New Orleans neighborhood boundaries
+│       ├── picky_mentions.rds          # review matches for picky-eater phrases
+│       ├── picky_sample.csv            # hand-labeled sample of phrase matches
 │       ├── reviews_no_text.rds         # filtered reviews without the text column
-│       ├── users.rds                   # filtered reviewer data
-│       └── neighborhoods.geojson       # New Orleans neighborhood boundaries
+│       ├── top10.rds                   # saved top 10 results for the report summary
+│       └── users.rds                   # filtered reviewer data
+├── figures                             # figures for the report
+│   └── top10_map.png                   # map of the top 10 restaurants
 ├── R/
-│   └── import.R                        # imports the large JSON files, filters, caches
+│   ├── config.R                        # shared settings: area, file paths, study area, boundaries
+│   ├── explore_reviews.R               # optional: shows review text for restaurants in the final ZIP codes. Import first.
+│   ├── import.R                        # imports the large JSON files, filters, caches
+│   └── picky_search.R                  # searches review text for picky-eater phrases, caches matches
 ├── renv/                               # renv setup files (activate.R, settings.json)
 ├── renv.lock                           # package versions
 ├── .Rprofile                           # activates renv
@@ -39,18 +45,19 @@ yelp-new-orleans-project/
 ## Getting the data
 
 1.  Download the Yelp Open Dataset (JSON version) from <https://business.yelp.com/data/resources/open-dataset/>. You will need to accept Yelp's terms.
-2.  Extract the archive and place these two files in `data/raw/`:
+2.  Extract the archive and place these files in `data/raw/`:
     - `yelp_academic_dataset_business.json`
     - `yelp_academic_dataset_review.json`
+    - `yelp_academic_dataset_user.json`
 3.  Open the project in RStudio, restore packages with `renv::restore()`, and run `R/import.R`.
 
-The review file is about 5 GB, and parsing it takes roughly 8 to 10 minutes. `import.R` streams it in chunks, keeps only Louisiana businesses, and saves the result to `data/LA/`. After that, every later step reads the small cached files.
+The review file is about 5 GB, and parsing it took about 355 seconds. `import.R` streams it in chunks, keeps only Louisiana restaurants, and saves the result to `data/LA/`. The user file is about 3 GB; parsing it took about 185 seconds. `import.R` streams it in chunks and saves the result to `data/LA/`. After import, every later step reads the small cached files.
 
-To run the project for another city, change `area_city`, `area_state`, and `out_dir` at the top of `R/import.R`, and make the necessary changes to the geographic area in the .qmd file.
+To run the project for another city, change `area_state` and `out_dir` in the config file, and make the necessary changes to the geographic area and the discussion in the .qmd file.
 
 ## Why the raw data is not on GitHub
 
-The raw JSON files are several gigabytes, which is far above GitHub's 100 MB file limit. The filtered New Orleans files in `data/LA/` are small enough to commit, and the steps above recreate everything else. The repo includes `business.rds`, `reviews_no_text.rds`, `users.rds`, and `neighborhoods.geojson`; the full reviews with text are recreated by running `R/import.R`.
+The raw JSON files are several gigabytes, far above GitHub’s 100 MB file limit. The filtered files in data/LA/ are small enough to commit: `business.rds`, `reviews_no_text.rds`, `users.rds`, `neighborhoods.geojson`, `picky_mentions.rds`, `picky_sample.csv`, and `top10.rds`. The full reviews with text are recreated by running `R/import.R`, and the phrase matches by running `R/picky_search.R`. `picky_sample.csv` contains hand-labeled data and cannot be regenerated.
 
 ## Report
 
@@ -58,14 +65,17 @@ The raw JSON files are several gigabytes, which is far above GitHub's 100 MB fil
 
 ## Key findings
 
-*TODO: two or three findings written for a nontechnical reader, with embedded tables, graphs, and maps.*
+- Useful (and useless) phrases for picky eaters looking for a place to eat:
+  - "Picky kid" is the only one I found useful.
+  - "Picky eater" also shows up a lot in the data, but it's too often inside phrases like "I'm not a picky eater, but the food here is terrible!"
+  - Other phrases were not correlated closely enough with positive reviews related to picky eaters to be any use.
+- 16 ZIP codes, covering a large portion of New Orleans and the nearby area, contained 10 or more likely candidates. This suggests a tourist family has plenty of options even if some or all of them are picky eaters.
+- Adjusting for reviewer activity doesn't change rankings much...for the most part. Looking only at the Yelp average rating is still a pretty good measure of what people actually thought about it, regardless of how many stars they tend to be willing to give on average.
 
 ## Tools
 
-R, RStudio, Quarto. Packages: tidyverse, jsonlite, lubridate, sf, tigris, scales, viridis, renv.
+R, RStudio, Quarto. Packages: tidyverse, jsonlite, lubridate, sf, tigris, scales, viridis, renv, ggspatial, prettymapr, leaflet, knitr, shadowtext, ggrepel.
 
 ## AI assistance
 
-*TODO: update this*
-
-I used Claude (Anthropic) as a coding and troubleshooting assistant. Claude also drafted the structure of this README and the report. The research question, category selection, analysis decisions, and conclusions are my own. I review and test all code before using it.
+I used Claude (Anthropic) as a coding and troubleshooting assistant. Claude also drafted the initial structure of the report and this README. The research question, category selection and other analysis decisions, discussion, and conclusions are my own. I review and test all code before using it.

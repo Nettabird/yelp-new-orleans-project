@@ -16,3 +16,4 @@ data/*/reviews.rds
 # OS
 .DS_Store
 **/*.quarto_ipynb
+rosm.cache/
